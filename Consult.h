@@ -17,7 +17,13 @@
 #define Consult_h
 
 // Include default arduino stuffs
-#include "WProgram.h"
+//#ifndef ARDUINO_ARCH_ESP8266
+#if (ARDUINO >= 100)
+ #include <Arduino.h>
+#else
+ #include <WProgram.h>
+ #include <pins_arduino.h>
+#endif 
 #include "ConsultRegister.h"
 #include "ConsultErrorCode.h"
 
