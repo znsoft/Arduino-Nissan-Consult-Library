@@ -33,7 +33,12 @@
 #define ECU_COMMAND_CLEAR_CODES 0xC1
 #define ECU_COMMAND_ECU_INFO 0xD0
 #define ECU_COMMAND_TERM 0xF0
-#define ECU_COMMAND_STOP_STREAM 0x3
+#define ECU_COMMAND_STOP_STREAM 0x30 // 0x3 
+
+#define ECU_INIT_GENERIC 0xEF
+#define ECU_INIT_AT 0xEA
+#define ECU_INIT_HYDRAULIC 0xE4
+#define ECU_INIT_AIRCON 0xDF 
 
 // Define single register locations
 #define ECU_REGISTER_COOLANT_TEMP 0x08
@@ -56,6 +61,7 @@
 
 class Consult {
   public:
+	  String debugString;
     // Default Constructor
     Consult();
 
@@ -65,8 +71,16 @@ class Consult {
     // Determine what type of units you want
     void setMetric(boolean v);
 
-    // Inits the ECU
+template<typename T>
+    void MyDebug(T s);
+    
+	String GetMyDebug();
+	void ClrMyDebug();
+	
+	// Inits the ECU
     boolean initEcu();
+
+    boolean initEcu(byte v);
 
     // Retrieve a value out of the ECU's registry,
     // Pass in the msbAddr of the register, if this value is read from

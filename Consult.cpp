@@ -29,6 +29,14 @@ void Consult::setMetric(boolean v)
   _isMetric = v;
 }
 
+   template<typename T>
+    void Consult::MyDebug(T s) {
+		debugString += String(s);
+	}
+
+
+
+
 // Set Serial Device
 void Consult::setSerial(HardwareSerial *serial)
 {
@@ -51,7 +59,7 @@ boolean Consult::initEcu()
   if (_consultSerial == NULL) {
     return false;
   }
-  
+  MyDebug("\nInit\n");  
   // First stop any streams
   stopEcuStream();
   
@@ -60,18 +68,18 @@ boolean Consult::initEcu()
     // Send init sequence
     writeEcu(0xFF);
     writeEcu(0xFF);
-    writeEcu(0xEF);
-    
+    writeEcu(ECU_INIT_GENERIC);
+    MyDebug("\n"); 
     // Read from ecu
     if (readEcuWithTimeout(&ecuByte, 2)) {
        if (ecuByte == 0x10) {
-         // We initialized it!
+		   MyDebug("\nInit: We initialized it!\n");
        }
        else {
-         // Already initialized
+		   MyDebug("\nInit: Already initialized\n");
        }
        // Send stop command
-       stopEcuStream();
+       stopEcuStream();//znsoft debug 1
        return true;
     }
     delay(250);
@@ -79,6 +87,56 @@ boolean Consult::initEcu()
   
   return false;
 }
+
+
+// Inits the ECU
+boolean Consult::initEcu(byte v)
+{
+  // Byte we will read from ecu
+  int ecuByte;
+ 
+  // Verify we have set the Serial
+  if (_consultSerial == NULL) {
+    return false;
+  }
+  MyDebug("\nInit\n");
+  // First stop any streams
+  stopEcuStream();
+  
+  // Make 2 attempts to init
+  for (int x=0; x<2; x++) {
+    // Send init sequence
+    writeEcu(0xFF);
+    writeEcu(0xFF);
+    writeEcu(v);
+        MyDebug("\n"); 
+
+    // Read from ecu
+    if (readEcuWithTimeout(&ecuByte, 2)) {
+       if (ecuByte == 0x10) {
+		   MyDebug("\nInit: We initialized it!\n");
+       }
+       else {
+		   MyDebug("\nInit: Already initialized\n");
+       }
+       // Send stop command
+       stopEcuStream();//znsoft debug 1
+       return true;
+    }
+    delay(250);
+  }
+  
+  return false;
+}
+
+String Consult::GetMyDebug(){
+return debugString;
+}
+
+void Consult::ClrMyDebug(){
+ debugString = "";
+}
+
 
 // Tell the ECU to cancel its stream (shutup)
 void Consult::stopEcuStream()
@@ -96,6 +154,7 @@ void Consult::stopEcuStream()
 // Write byte to the ECU
 void Consult::writeEcu(byte v)
 {
+	MyDebug(" w("+String(v,HEX)+")");
   // Use serial write to send raw value
   // Otherwise Serial.print will just send ASCII values
   _consultSerial->write(v);
@@ -119,16 +178,18 @@ boolean Consult::readEcu(int *ecuByte)
 boolean Consult::readEcuWithTimeout(int *ecuByte, int timeout)
 {
   unsigned long startTime = millis();
-  
+  MyDebug(" r");
   // Loop until our timeout
   do {
     if (_consultSerial->available() > 0) {
       *ecuByte = _consultSerial->read();
+	  MyDebug("["+String(*ecuByte,HEX)+"]");
       return true;
     }
     delay(5);
   } 
   while ((millis()-startTime) < (timeout*1000));
+	MyDebug("[NO]");
   return false;
 }
 
@@ -141,7 +202,7 @@ boolean Consult::getRegisterValue(byte msbAddr, byte lsbAddr, int *returnValue)
 {
   // Value that we read from ECU
   int lsb, msb, ecuByte, readCount = 0;
-  
+  MyDebug("\n getRegisterValue:");
   // Send Register read command
   writeEcu(ECU_COMMAND_READ_REGISTER);
   
@@ -159,7 +220,7 @@ boolean Consult::getRegisterValue(byte msbAddr, byte lsbAddr, int *returnValue)
   
   // Send command termination
   writeEcu(ECU_COMMAND_TERM);
-  
+  MyDebug("\n");
   // Now read first byte, it should be our ECU_COMMAND_READ_REGISTER inverted
   readEcu(&ecuByte);
   
@@ -176,7 +237,7 @@ boolean Consult::getRegisterValue(byte msbAddr, byte lsbAddr, int *returnValue)
   do {
     // If we fail to read anything
     if (!readEcu(&ecuByte)) {
-      // Just quit
+      MyDebug("\n fail to read anything\n");
       stopEcuStream();
       return false;
     }
@@ -184,7 +245,7 @@ boolean Consult::getRegisterValue(byte msbAddr, byte lsbAddr, int *returnValue)
     // Do a max of 4 reads
     readCount++;
     if (readCount > 4) {
-      // Error, Failed to find start frame byte!
+		MyDebug("\n Error, Failed to find start frame byte! \n");
       stopEcuStream();
       return false;
     }
@@ -220,6 +281,7 @@ boolean Consult::getRegisterValue(byte msbAddr, byte lsbAddr, int *returnValue)
 boolean Consult::errorCheckCommandByte(byte commandByte, byte errorCheckByte) 
 {
   if (commandByte != (byte)~errorCheckByte) {
+	  MyDebug("\n ErrorCheck \n");
     stopEcuStream();
     return false;
   }
@@ -230,7 +292,8 @@ boolean Consult::errorCheckCommandByte(byte commandByte, byte errorCheckByte)
 boolean Consult::getEcuPartNumber(char returnValue[12])
 {
   int ecuByte, curPos = 6;
-  
+      MyDebug("\nGet P/N\n"); 
+
   // Default data
   returnValue[0] = '2';
   returnValue[1] = '3';
@@ -244,16 +307,20 @@ boolean Consult::getEcuPartNumber(char returnValue[12])
   
   // Send command  
   writeEcu(ECU_COMMAND_ECU_INFO);  // 11010000 
-  writeEcu(ECU_COMMAND_TERM);      // 00101111  
-  
+
+  writeEcu(ECU_COMMAND_TERM);
+      MyDebug("\n"); 
+
   // First byte should be 0xD0 inverted
-  readEcu(&ecuByte);
+  readEcu(&ecuByte);  // Wait for 00101111  
   if (!errorCheckCommandByte(ECU_COMMAND_ECU_INFO, ecuByte)) {
     return false;
   }
-  
-  // Then we should get a start frame byte
+
+    
+  // Then we should get a start frame byte 0xFF
   readEcu(&ecuByte);
+
   
   // Then we should get 22 bytes of data
   for (int x=1; x<=22; x++) {
@@ -276,14 +343,18 @@ boolean Consult::getEcuPartNumber(char returnValue[12])
 boolean Consult::getNumberOfErrorCodes(int *numberOfCodes)
 {
    int numberOfBytes = 0, ecuByte;
-  
+      MyDebug("\nGetErrCount\n"); 
+
   // Stop any previous streams
   stopEcuStream();
   
   // Send command  
   writeEcu(ECU_COMMAND_SELF_DIAG); 
+
+
   writeEcu(ECU_COMMAND_TERM); 
-  
+      MyDebug("\n"); 
+
   // First byte should be 0xD1 inverted
   readEcu(&ecuByte);
   if (!errorCheckCommandByte(ECU_COMMAND_SELF_DIAG, ecuByte)) {
@@ -291,7 +362,7 @@ boolean Consult::getNumberOfErrorCodes(int *numberOfCodes)
   }
   
   // Then we should get a start frame byte
-  readEcu(&ecuByte);
+  readEcu(&ecuByte); //0xFF
   
   // The next byte should be how many bytes the ECU is about to send over
   readEcu(&numberOfBytes);
@@ -304,20 +375,23 @@ boolean Consult::getNumberOfErrorCodes(int *numberOfCodes)
 boolean Consult::getErrorCode(int codeNumber, ConsultErrorCode *errorCode)
 {
   int numberOfBytes = 0, ecuByte, ecuCode, ecuLastSeen;
-  
+      MyDebug("\nGetErr\n"); 
+
   // Stop any previous streams
   stopEcuStream();
   
   // Send command  
   writeEcu(ECU_COMMAND_SELF_DIAG); 
+
   writeEcu(ECU_COMMAND_TERM); 
-  
-  // First byte should be 0xD1 inverted
+    MyDebug("\n"); 
+
+    // First byte should be 0xD1 inverted
   readEcu(&ecuByte);
   if (!errorCheckCommandByte(ECU_COMMAND_SELF_DIAG, ecuByte)) {
     return false;
   }
-  
+
   // Then we should get a start frame byte
   readEcu(&ecuByte);
   
@@ -358,19 +432,22 @@ boolean Consult::getErrorCode(int codeNumber, ConsultErrorCode *errorCode)
 boolean Consult::clearErrorCodes()
 {
   int ecuByte; 
-  
+      MyDebug("\nClear\n"); 
+
   // Stop any previous streams
   stopEcuStream();
   
   // Send command  
   writeEcu(ECU_COMMAND_CLEAR_CODES); 
   writeEcu(ECU_COMMAND_TERM);
-  
+      MyDebug("\n"); 
+
   // First byte should be 0xC1 inverted
   readEcu(&ecuByte);
   if (!errorCheckCommandByte(ECU_COMMAND_CLEAR_CODES, ecuByte)) {
     return false;
   }
+
   
   // Then stop the stream
   stopEcuStream();
@@ -384,7 +461,8 @@ boolean Consult::startEcuStream(ConsultRegister myRegisters[], int numRegisters)
 {
   // Byte read from ecu
   int ecuByte;
-  
+      MyDebug("\nStart stream\n"); 
+
   // Loop thru each register and tell ECU we want it to stream it to us
   for (int x=0; x<numRegisters; x++) {
     // Send Register read command
@@ -404,7 +482,8 @@ boolean Consult::startEcuStream(ConsultRegister myRegisters[], int numRegisters)
   }  
   // Send command termination
   writeEcu(ECU_COMMAND_TERM);
-    
+       MyDebug("\n"); 
+ 
   // Loop thru each register and verify ecu got what we wanted
   for (int x=0; x<numRegisters; x++) {
     // Read firt byte, it should be our command inverted
@@ -447,7 +526,8 @@ boolean Consult::readEcuStream(ConsultRegister myRegisters[], int numRegisters)
 {
   // Value read from ECU
   int ecuByte, readCount = 0, value;
-  
+      MyDebug("\nReadStream\n"); 
+
   // Flush stream, 
   // Probably not the best way to do this, but I was worried about
   // The arduino not being able to keep up with the data feed from the ECU
